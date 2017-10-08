@@ -548,7 +548,7 @@ int mosquitto_auth_acl_check(void *userdata, const char *clientid, const char *u
 		return MOSQ_DENY_ACL;
 	}
 
-	if(clientid && strpbrk(clientid, "+#/")){
+	if(clientid && strpbrk(clientid, "+#")){
 		_log(MOSQ_LOG_NOTICE, "ACL denying access to client with dangerous client id \"%s\"", clientid);
 		return MOSQ_DENY_ACL;
 	}
