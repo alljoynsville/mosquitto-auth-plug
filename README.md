@@ -22,7 +22,7 @@ and authorization (ACL). Currently not all back-ends have the same capabilities
 (the the section on the back-end you're interested in).
 
 | Capability                 | mysql | redis | cdb   | sqlite | ldap | psk | postgres | http | jwt | MongoDB | Files |
-| -------------------------- | :---: | :---: | :---: | :---:  | :-:  | :-: | :------: | :--: | :-: | :-----: | :----: 
+| -------------------------- | :---: | :---: | :---: | :---:  | :-:  | :-: | :------: | :--: | :-: | :-----: | :----:
 | authentication             |   Y   |   Y   |   Y   |   Y    |  Y   |  Y  |    Y     |  Y   |  Y  |  Y      | Y
 | superusers                 |   Y   |       |       |        |      |  3  |    Y     |  Y   |  Y  |  Y      | N
 | acl checking               |   Y   |   1   |   2   |   2    |      |  3  |    Y     |  Y   |  Y  |  Y      | Y
@@ -108,8 +108,26 @@ Options therein with a leading ```auth_opt_``` are handed to the plugin. The fol
 | backends       |            |     Y       | comma-separated list of back-ends to load |
 | superusers     |            |             | fnmatch(3) case-sensitive string
 | log_quiet      | false      |             | don't log DEBUG messages |
+| cacheseconds   |                   |             | Deprecated. Alias for acl_cacheseconds
+| acl_cacheseconds  | 300               |             | number of seconds to cache ACL lookups. 0 disables
+| auth_cacheseconds | 0                 |             | number of seconds to cache AUTH lookups. 0 disables
+| acl_cachejitter   | 0                 |             | maximum number of seconds to add/remove to ACL lookups cache TTL. 0 disables
+| auth_cachejitter  | 0                 |             | maximum number of seconds to add/remove to AUTH lookups cache TTL. 0 disables
+=======
 
 Individual back-ends have their options described in the sections below.
+
+There are two caches, one for ACL and another for authentication. By default only the ACL cache is enabled.
+
+After a backend responds (postitively or negatively) for an ACL or AUTH lookup, the result will be kept in cache for
+the configured TTL, the same ACL lookup will be served from the cache as long as the TTL is valid.
+The configured TTL is the auth/acl_cacheseconds combined with a random value between -auth/acl_cachejitter and +auth/acl_cachejitter.
+For example, with an acl_cacheseconds of 300 and acl_cachejitter of 10, ACL lookup TTL are distributed between 290 and 310 seconds.
+
+Set auth/acl_cachejitter to 0 disable any randomization of cache TTL. Settings auth/acl_cacheseconds to 0 disable caching entirely.
+Caching is useful when your backend lookup is expensive. Remember that ACL lookup will be performed for each message which is sent/received on a topic.
+Jitter is useful to reduce lookup storms that could occur every auth/acl_cacheseconds if lots of clients connect at the same time (for example
+after a server restart, all your clients may reconnect immediately and all may cause ACL lookups every acl_cacheseconds).
 
 ### MySQL
 
@@ -135,9 +153,12 @@ The following `auth_opt_` options are supported by the mysql back-end:
 | mysql_opt_reconnect | true         |             | enable MYSQL_OPT_RECONNECT option
 | mysql_auto_connect  | true         |             | enable auto_connect function
 | anonusername   | anonymous         |             | username to use for anonymous connections
-| cacheseconds   |                   |             | Deprecated. Alias for acl_cacheseconds
-| acl_cacheseconds  | 300               |             | number of seconds to cache ACL lookups. 0 disables
-| auth_cacheseconds | 0                 |             | number of seconds to cache AUTH lookups. 0 disables
+| ssl_enabled    | false 	     |		   | enable SSL 
+| ssl_key        |   	 	     |		   | path name of client private key file
+| ssl_cert       | 	 	     |		   | path name of client public key certificate file  
+| ssl_ca         | 	 	     |		   | path name of Certificate Authority(CA) certificate file 
+| ssl_capath     | 	 	     |		   | path name of directory that contains trusted CA certifcate files 
+| ssl_cipher     | 	 	     |		   | permitted ciphers for SSL encryption 
 
 The SQL query for looking up a user's password hash is mandatory. The query
 MUST return a single row only (any other number of rows is considered to be
@@ -398,7 +419,7 @@ The `username`-field is interpreted as the token-field and passed to the http-se
 Authorization: Bearer %token
 ```
 
-**Note**: Some clients require the password-field to be populated. This field is ignored by the JWT-backend, so feel free to input some gibberish. 
+**Note**: Some clients require the password-field to be populated. This field is ignored by the JWT-backend, so feel free to input some gibberish.
 
 
 
@@ -413,8 +434,8 @@ you currently have.
 
 The following `auth_opt_` options are supported by the mysql back-end:
 
-| Option         | default           |  Mandatory  | Meaning               |
-| -------------- | ----------------- | :---------: | --------------------- |
+| Option         | default           |  Mandatory  | Meaning                  |
+| -------------- | ----------------- | :---------: | ------------------------ |
 | host           | localhost         |             | hostname/address
 | port           | 5432              |             | TCP port
 | user           |                   |             | username
@@ -423,6 +444,8 @@ The following `auth_opt_` options are supported by the mysql back-end:
 | userquery      |                   |     Y       | SQL for users
 | superquery     |                   |             | SQL for superusers
 | aclquery       |                   |             | SQL for ACLs
+| sslcert        |                   |             | SSL/TLS Client Cert.
+| sslkey         |                   |             | SSL/TLS Client Cert. Key
 
 The SQL query for looking up a user's password hash is mandatory. The query
 MUST return a single row only (any other number of rows is considered to be
@@ -457,7 +480,7 @@ replaced with the integer value `1` signifying a read-only access attempt
 (SUB) or `2` signifying a read-write access attempt (PUB).
 
 In the following example, the table has a column `rw` containing 1 for
-readonly topics, and 2 for read-write topics:
+readonly topics, 2 for writeonly topics and 3 for readwrite topics:
 
 ```sql
 SELECT topic FROM acl WHERE (username = $1) AND rw >= $2
@@ -474,7 +497,9 @@ auth_opt_user jjj
 auth_opt_pass supersecret
 auth_opt_userquery SELECT pw FROM account WHERE username = $1 limit 1
 auth_opt_superquery SELECT COALESCE(COUNT(*),0) FROM account WHERE username = $1 AND mosquitto_super = 1
-auth_opt_aclquery SELECT topic FROM acls WHERE (username = $1) AND (rw & $2) > 0```
+auth_opt_aclquery SELECT topic FROM acls WHERE (username = $1) AND (rw & $2) > 0
+auth_opt_sslcert /etc/postgresql/ssl/client.crt
+auth_opt_sslkey /etc/postgresql/ssl/client.key
 ```
 Assuming the following database tables:
 
@@ -544,7 +569,7 @@ Each user document must have a username, a hashed password, and at least one of:
  - A superuser prop, allowing full access to all topics
  - An embedded array or sub-document to use as an ACL (see 'ACL format')
  - A foreign key pointing to another document containing an ACL (see 'ACL format')
- 
+
 You may use any combination of these options; authorisation will be granted if any check passes.
 
 The user document has the following format (note that the property names are configurable variables, see 'Configuration').
@@ -588,8 +613,8 @@ This strategy will be especially suitable if you have a complex ACL shared betwe
 
 #### ACL format
 
-Topics may be given as either an array of topic strings, eg `["topic1/#", "topic2/+"]`, in which case all topics will 
-be read-write, or as a sub-document mapping topic names to the strings `"r"`, `"w"`, `"rw"`, eg 
+Topics may be given as either an array of topic strings, eg `["topic1/#", "topic2/+"]`, in which case all topics will
+be read-write, or as a sub-document mapping topic names to the strings `"r"`, `"w"`, `"rw"`, eg
 `{ "article/#":"r", "article/+/comments":"rw", "ballotbox":"w" }`.
 
 #### Configuration

@@ -53,6 +53,16 @@ ifneq ($(BACKEND_REDIS),no)
 	OBJS += be-redis.o
 endif
 
+ifeq ($(BACKEND_MEMCACHED),yes)
+	BACKENDS += -DBE_MEMCACHED
+	BACKENDSTR += Memcached
+
+	BE_CFLAGS += -I/usr/local/include/libmemcached
+	BE_LDFLAGS += -L/usr/local/lib
+	BE_LDADD += -lmemcached
+	OBJS += be-memcached.o
+endif
+
 ifneq ($(BACKEND_POSTGRES),no)
 	BACKENDS += -DBE_POSTGRES
 	BACKENDSTR += PostgreSQL
@@ -91,8 +101,8 @@ ifneq ($(BACKEND_MONGO), no)
 	BACKENDSTR += MongoDB
 
 	BE_CFLAGS += -I/usr/local/include/
-	BE_CFLAGS += -I/usr/local/include/libmongoc-1.0/
-	BE_CFLAGS += -I/usr/local/include/libbson-1.0/
+	BE_CFLAGS +=`pkg-config --cflags-only-I libmongoc-1.0 libbson-1.0`
+	BE_LDFLAGS +=`pkg-config --libs-only-L libbson-1.0 libmongoc-1.0`
 	BE_LDFLAGS += -L/usr/local/lib
 	BE_LDADD += -lmongoc-1.0 -lbson-1.0
 	OBJS += be-mongo.o
@@ -103,6 +113,14 @@ ifneq ($(BACKEND_FILES), no)
 	BACKENDSTR += Files
 
 	OBJS += be-files.o
+endif
+
+ifeq ($(origin SUPPORT_DJANGO_HASHERS), undefined)
+	SUPPORT_DJANGO_HASHERS = no
+endif
+
+ifneq ($(SUPPORT_DJANGO_HASHERS), no)
+	CFG_CFLAGS += -DSUPPORT_DJANGO_HASHERS
 endif
 
 OSSLINC = -I$(OPENSSLDIR)/include
@@ -142,6 +160,7 @@ auth-plug.so : $(OBJS) $(BE_DEPS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -fPIC -shared -o $@ $(OBJS) $(BE_DEPS) $(LDADD)
 
 be-redis.o: be-redis.c be-redis.h log.h hash.h envs.h Makefile
+be-memcached.o: be-memcached.c be-memcached.h log.h hash.h envs.h Makefile
 be-sqlite.o: be-sqlite.c be-sqlite.h Makefile
 auth-plug.o: auth-plug.c be-cdb.h be-mysql.h be-sqlite.h Makefile cache.h
 be-psk.o: be-psk.c be-psk.h Makefile

@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2017, Diehl Connectivity Solutions GmbH.
+ * Copyright (c) 2013 Jan-Piet Mens <jp@mens.de>
  * All rights reserved.
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- *
+ * 
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -13,7 +13,7 @@
  * 3. Neither the name of mosquitto nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -27,15 +27,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef BE_FILES
+#ifdef BE_MEMCACHED
 
-void *be_files_init();
-void be_files_destroy(void *handle);
-int be_files_getuser(void *handle, const char *username, const char *password, char **phash);
-int be_files_superuser(void *handle, const char *username);
-int be_files_aclcheck(void *handle, const char *clientid, const char *username, const char *topic, int access);
-
-int be_files_aclpatterns_available(void);
-int be_files_aclpatterns_check(const char *clientid, const char *username, const char *topic, int access);
-
-#endif /* BE_FILES */
+void *be_memcached_init();
+void be_memcached_destroy(void *conf);
+int be_memcached_getuser(void *handle, const char *username, const char *password, char **phash);
+int be_memcached_superuser(void *conf, const char *username);
+int be_memcached_aclcheck(void *conf, const char *clientid, const char *username, const char *topic, int acc);
+#endif /* BE_MEMCACHED */
